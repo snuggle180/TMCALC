@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <title>Threadmilling Calculator</title>
+    <style>
+        :root {
+            --background-color: #1c1c1e;
+            --container-color: #2c2c2e;
+            --input-bg-color: #3a3a3c;
+            --text-color: #ffffff;
+            --label-color: #c7c7cc;
+            --primary-color: #0a84ff;
+            --border-color: #545458;
+            --success-color: #32d74b;
+            --error-color: #ff453a;
+            --calculated-text-color: #ff9f0a;
+        }
+        html { -webkit-text-size-adjust: 100%; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 15px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 450px;
+            width: 100%;
+            background-color: var(--container-color);
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+        }
+        h1 {
+            text-align: center;
+            color: var(--primary-color);
+            margin-top: 0;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+        .tabs { display: flex; border-bottom: 2px solid var(--border-color); margin-bottom: 20px; }
+        .tab-button {
+            flex: 1; padding: 12px 5px; cursor: pointer; background-color: transparent;
+            border: none; color: var(--label-color); font-size: 16px; font-weight: 600;
+            position: relative; transition: color 0.3s ease; text-align: center;
+        }
+        .tab-button.active { color: var(--primary-color); }
+        .tab-button.active::after {
+            content: ''; position: absolute; bottom: -2px; left: 0;
+            right: 0; height: 2px; background-color: var(--primary-color);
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .input-list { display: flex; flex-direction: column; gap: 15px; }
+        .form-group { display: flex; flex-direction: column; }
+        .thread-size-labels { display: flex; justify-content: space-between; padding: 0 5px; }
+        .thread-size-inputs { display: flex; align-items: center; gap: 10px; }
+        .input-with-prefix {
+            display: flex; align-items: center; flex: 1;
+            background-color: var(--input-bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding-left: 15px;
+        }
+        .input-with-prefix .prefix {
+            font-size: 20px; font-weight: 600; color: var(--text-color);
+            position: relative; top: -1px; 
+        }
+        .input-with-prefix input { border: none; background-color: transparent; padding-left: 5px; }
+        .thread-size-inputs .separator { font-size: 20px; font-weight: 600; color: var(--label-color); }
+        .thread-size-inputs > input { flex: 1; }
+        label { display: block; margin-bottom: 6px; font-weight: 500; font-size: 14px; color: var(--label-color); }
+        .fraction-display {
+            color: var(--calculated-text-color);
+            font-size: 14px;
+            font-weight: 500;
+            height: 16px;
+            padding: 4px 5px 0 5px;
+            text-align: left;
+        }
+        input {
+            width: 100%; background-color: var(--input-bg-color); border: 1px solid var(--border-color);
+            padding: 14px; border-radius: 12px; color: var(--text-color);
+            font-size: 20px; font-weight: 600; box-sizing: border-box; min-width: 60px;
+        }
+        input:read-only { background-color: #222; color: var(--calculated-text-color); cursor: default; }
+        input:focus { outline: none; }
+        .input-with-prefix:focus-within, input:focus { border-color: var(--primary-color); }
+        .result-box {
+            margin-top: 20px; padding: 15px; background-color: #1c1c1e;
+            border: 1px solid var(--border-color); border-radius: 12px;
+        }
+        .result-box h2 {
+            margin: 0 0 10px 0; font-size: 16px; color: var(--primary-color);
+        }
+        .calculated-values { padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid var(--border-color);}
+        .result-entry, .calculated-drill-size {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 6px 0; font-size: 16px;
+        }
+        .result-entry .percentage, .calculated-drill-size .label { color: var(--label-color); font-weight: 500; }
+        .result-entry .value, .calculated-drill-size .value { color: var(--success-color); font-weight: 700; font-size: 18px; }
+        .fine-tune-area, .settings-area { margin-top: 15px; }
+        .error-message { color: var(--error-color); font-size: 14px; text-align: center; margin-top: 15px; height: 20px; }
+        .stepper { display: flex; align-items: center; justify-content: center; gap: 20px; }
+        .stepper-btn {
+            background-color: var(--input-bg-color); border: 1px solid var(--border-color); color: var(--label-color);
+            width: 44px; height: 44px; border-radius: 50%;
+            font-size: 24px; font-weight: bold; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            padding-bottom: 5px;
+        }
+        .stepper-value { font-size: 20px; font-weight: 600; min-width: 20px; text-align: center; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Threadmilling Calculator</h1>
+    <div class="tabs">
+        <button class="tab-button active" onclick="openTab(event, 'metric')">Metric</button>
+        <button class="tab-button" onclick="openTab(event, 'imperial')">Imperial</button>
+    </div>
+
+    <!-- Metric Tab -->
+    <div id="metric" class="tab-content active">
+        <div class="input-list">
+             <div class="form-group">
+                <div class="thread-size-labels">
+                    <label for="m_major_dia">Thread Dia (mm)</label>
+                    <label for="m_pitch">Thread Pitch (mm)</label>
+                </div>
+                <div class="thread-size-inputs">
+                    <div class="input-with-prefix">
+                        <span class="prefix">M</span>
+                        <input type="number" id="m_major_dia" oninput="updateMetricCalculations()">
+                    </div>
+                    <span class="separator">x</span>
+                    <input type="number" id="m_pitch" oninput="updateMetricCalculations()">
+                </div>
+            </div>
+            <div class="form-group"><label for="m_cutter_dia">Thread Mill Dia (mm)</label><input type="number" id="m_cutter_dia" oninput="updateMetricCalculations()"></div>
+            <div class="form-group"><label for="m_cut_increment">Cut Increment (%)</label><input type="number" id="m_cut_increment" oninput="updateMetricCalculations()"></div>
+        </div>
+        <div id="m_error" class="error-message"></div>
+        <div id="m_results" class="result-box"></div>
+    </div>
+
+    <!-- Imperial Tab -->
+    <div id="imperial" class="tab-content">
+        <div class="input-list">
+             <div class="form-group">
+                <div class="thread-size-labels">
+                    <label for="i_major_dia">Major Dia (inch)</label>
+                    <label for="i_tpi">Threads Per Inch (TPI)</label>
+                </div>
+                <div class="thread-size-inputs">
+                    <input type="number" id="i_major_dia" oninput="updateImperialCalculations()">
+                     <span class="separator"> - </span>
+                    <input type="number" id="i_tpi" oninput="updateImperialCalculations()">
+                </div>
+                 <div id="i_fraction_display" class="fraction-display"></div>
+            </div>
+            <div class="form-group"><label for="i_cutter_dia">Thread Mill Dia (mm)</label><input type="number" id="i_cutter_dia" oninput="updateImperialCalculations()"></div>
+            <div class="form-group"><label for="i_cut_increment">Cut Increment (%)</label><input type="number" id="i_cut_increment" oninput="updateImperialCalculations()"></div>
+        </div>
+        <div id="i_error" class="error-message"></div>
+        <div id="i_results" class="result-box"></div>
+    </div>
+</div>
+
+<script>
+    const mInputIds = ['m_major_dia', 'm_pitch', 'm_cutter_dia', 'm_cut_increment', 'm_fine_tune_percent'];
+    const iInputIds = ['i_major_dia', 'i_tpi', 'i_cutter_dia', 'i_cut_increment', 'i_fine_tune_percent'];
+    let mDecimalPlaces = 3, iDecimalPlaces = 3;
+
+    // --- References to DOM elements ---
+    const m = {}, i = {};
+    function getElements() {
+        m.error = document.getElementById('m_error');
+        m.results = document.getElementById('m_results');
+        i.error = document.getElementById('i_error');
+        i.results = document.getElementById('i_results');
+        i.fractionDisplay = document.getElementById('i_fraction_display');
+        mInputIds.forEach(id => m[id] = document.getElementById(id));
+        iInputIds.forEach(id => i[id] = document.getElementById(id));
+    }
+    
+    // --- LOCAL STORAGE ---
+    function saveState() {
+        mInputIds.forEach(id => { if (m[id]) localStorage.setItem(id, m[id].value); });
+        iInputIds.forEach(id => { if (i[id]) localStorage.setItem(id, i[id].value); });
+        localStorage.setItem('m_decimals', mDecimalPlaces);
+        localStorage.setItem('i_decimals', iDecimalPlaces);
+    }
+
+    function loadState() {
+        mInputIds.forEach(id => { const val = localStorage.getItem(id); if (m[id] && val) m[id].value = val; });
+        iInputIds.forEach(id => { const val = localStorage.getItem(id); if (i[id] && val) i[id].value = val; });
+        const mDec = localStorage.getItem('m_decimals');
+        const iDec = localStorage.getItem('i_decimals');
+        if (mDec) mDecimalPlaces = parseInt(mDec, 10);
+        if (iDec) iDecimalPlaces = parseInt(iDec, 10);
+    }
+    
+    // --- UI & MATH LOGIC ---
+    function openTab(evt, tabName) {
+        document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+        document.querySelectorAll('.tab-button').forEach(tb => tb.classList.remove('active'));
+        document.getElementById(tabName).classList.add('active');
+        evt.currentTarget.classList.add('active');
+    }
+    function changeDecimals(isMetric, amount) {
+        if(isMetric) {
+            mDecimalPlaces += amount;
+            if (mDecimalPlaces < 1) mDecimalPlaces = 1; if (mDecimalPlaces > 6) mDecimalPlaces = 6;
+            updateMetricCalculations();
+        } else {
+            iDecimalPlaces += amount;
+            if (iDecimalPlaces < 1) iDecimalPlaces = 1; if (iDecimalPlaces > 6) iDecimalPlaces = 6;
+            updateImperialCalculations();
+        }
+    }
+    const calculateXAxisValue = (majorDia, drillSize, cutterDia, cutPercent) => {
+        const diffRadius = (majorDia - drillSize) / 2;
+        const tmToHoleEdge = (drillSize / 2) - (cutterDia / 2);
+        return tmToHoleEdge + (diffRadius * (cutPercent / 100));
+    }
+    
+    function decimalToFraction(decimal) {
+        if(isNaN(decimal) || decimal === 0) return '';
+        const tolerance = 0.001;
+        const denominators = [2, 4, 8, 16, 32, 64];
+        
+        const wholePart = Math.floor(decimal);
+        const fractionalPart = decimal - wholePart;
+
+        if (fractionalPart < tolerance) return wholePart > 0 ? `( ${wholePart}" )` : '';
+        
+        for (let d of denominators) {
+            const numerator = Math.round(fractionalPart * d);
+            if (Math.abs(numerator / d - fractionalPart) < tolerance) {
+                const gcd = (a, b) => b ? gcd(b, a % b) : a;
+                const commonDivisor = gcd(numerator, d);
+                const simpNum = numerator / commonDivisor;
+                const simpDen = d / commonDivisor;
+                
+                let result = '( ';
+                if(wholePart > 0) result += `${wholePart} `;
+                result += `${simpNum}/${simpDen}" )`;
+                return result;
+            }
+        }
+        return ''; // No common fraction found
+    }
+    
+    function updateCalculations(config) {
+        const getVal = (id) => parseFloat(document.getElementById(id)?.value);
+        
+        let { majorDia, cutterDia, increment, fineTunePercent, pitch, tpi } = config.values;
+        const { isMetric, elements, decimalPlaces } = config;
+        
+        const majorDiaMM = isMetric ? majorDia : majorDia * 25.4;
+        pitch = isMetric ? pitch : (tpi > 0 ? 25.4 / tpi : 0);
+        const drillSize = majorDiaMM - pitch;
+        
+        elements.error.textContent = '';
+        
+        if (!isMetric) {
+            elements.fractionDisplay.textContent = decimalToFraction(majorDia);
+        }
+
+        const inputs = { majorDia: majorDiaMM, cutterDia, pitch };
+        for(const key in inputs) {
+            if(isNaN(inputs[key])) {
+                elements.results.innerHTML = '';
+                return;
+            }
+        }
+
+        if (drillSize <= 0) { elements.error.textContent = 'Pitch must be smaller than Major Dia.'; return; }
+        if (cutterDia >= drillSize) { elements.error.textContent = 'Cutter Dia must be smaller than Drill Size.'; return; }
+
+        let calculatedValuesHTML = `<div class="calculated-values">
+                                        <div class="calculated-drill-size">
+                                            <span class="label">Drill Size:</span>
+                                            <span class="value">${drillSize.toFixed(decimalPlaces)} mm</span>
+                                        </div>`;
+        if(!isMetric && pitch > 0) {
+             calculatedValuesHTML += `<div class="calculated-drill-size" style="padding-top:0;">
+                                        <span class="label">Thread Pitch (Use As Lead):</span>
+                                        <span class="value">${pitch.toFixed(decimalPlaces)} mm</span>
+                                      </div>`;
+        }
+        calculatedValuesHTML += '</div>';
+
+        let incrementalCutsHTML = '';
+        if (!isNaN(increment) && increment > 0) {
+            incrementalCutsHTML += '<h2>Incremental Cuts</h2>';
+            for (let percent = increment; percent <= 100; percent += increment) {
+                const value = calculateXAxisValue(majorDiaMM, drillSize, cutterDia, percent);
+                incrementalCutsHTML += `<div class="result-entry"><span class="percentage">${percent}% Cut:</span> <span class="value">${value.toFixed(decimalPlaces)}</span></div>`;
+            }
+            if (100 % increment !== 0 && increment < 100) {
+                 const value = calculateXAxisValue(majorDiaMM, drillSize, cutterDia, 100);
+                 incrementalCutsHTML += `<div class="result-entry"><span class="percentage">100% Cut:</span> <span class="value">${value.toFixed(decimalPlaces)}</span></div>`;
+            }
+        }
+        
+        const fineTuneId = isMetric ? 'm_fine_tune_percent' : 'i_fine_tune_percent';
+        let fineTuneHTML = `<div class="fine-tune-area">
+                        <div class="form-group"><label>Fine-Tune Cut (%)</label><input type="number" id="${fineTuneId}" value="${fineTunePercent}" oninput="${isMetric ? 'updateMetricCalculations()' : 'updateImperialCalculations()'}"></div>
+                        <div class="result-entry" id="${fineTuneId}_result"></div></div>`;
+        
+        let settingsHTML = `<div class="settings-area">
+                        <div class="form-group"><label>Decimal Places</label>
+                            <div class="stepper">
+                                <button class="stepper-btn" onclick="changeDecimals(${isMetric}, -1)">-</button>
+                                <span class="stepper-value">${decimalPlaces}</span>
+                                <button class="stepper-btn" onclick="changeDecimals(${isMetric}, 1)">+</button>
+                            </div>
+                        </div></div>`;
+
+        elements.results.innerHTML = calculatedValuesHTML + incrementalCutsHTML + fineTuneHTML + settingsHTML;
+
+        const fineTuneResultEl = document.getElementById(`${fineTuneId}_result`);
+        const finalFineTuneValue = getVal(fineTuneId);
+
+        if(!isNaN(finalFineTuneValue)){
+            const value = calculateXAxisValue(majorDiaMM, drillSize, cutterDia, finalFineTuneValue);
+            fineTuneResultEl.innerHTML = `<span class="percentage">${finalFineTuneValue}% Cut:</span> <span class="value">${value.toFixed(decimalPlaces)}</span>`;
+        } else {
+            fineTuneResultEl.innerHTML = '';
+        }
+        
+        saveState();
+    }
+
+    function updateMetricCalculations(){
+        const getVal = (id) => parseFloat(document.getElementById(id)?.value);
+        updateCalculations({
+            values: { majorDia: getVal('m_major_dia'), pitch: getVal('m_pitch'), cutterDia: getVal('m_cutter_dia'), increment: getVal('m_cut_increment'), fineTunePercent: getVal('m_fine_tune_percent') || 100 },
+            isMetric: true, elements: { error: m.error, results: m.results }, decimalPlaces: mDecimalPlaces
+        });
+    }
+
+    function updateImperialCalculations(){
+        const getVal = (id) => parseFloat(document.getElementById(id)?.value);
+        updateCalculations({
+            values: { majorDia: getVal('i_major_dia'), tpi: getVal('i_tpi'), cutterDia: getVal('i_cutter_dia'), increment: getVal('i_cut_increment'), fineTunePercent: getVal('i_fine_tune_percent') || 100 },
+            isMetric: false, elements: { error: i.error, results: i.results, fractionDisplay: i.fractionDisplay }, decimalPlaces: iDecimalPlaces
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        getElements();
+        // Set default values if nothing is in local storage
+        if(localStorage.getItem('m_major_dia') === null) { m.m_major_dia.value = 6; m.m_pitch.value = 1; m.m_cutter_dia.value = 4.8; m.m_cut_increment.value = 25; }
+        if(localStorage.getItem('i_major_dia') === null) { i.i_major_dia.value = 0.25; i.i_tpi.value = 20; i.i_cutter_dia.value = 4.8; i.i_cut_increment.value = 25; }
+        loadState();
+        updateMetricCalculations();
+        updateImperialCalculations();
+    });
+</script>
+
+</body>
+</html>
