@@ -106,7 +106,7 @@
         }
         .result-entry .percentage, .calculated-drill-size .label { color: var(--label-color); font-weight: 500; }
         .result-entry .value, .calculated-drill-size .value { color: var(--success-color); font-weight: 700; font-size: 18px; }
-        .fine-tune-area, .settings-area { margin-top: 15px; }
+        .fine-tune-area, .settings-area { margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border-color); }
         .error-message { color: var(--error-color); font-size: 14px; text-align: center; margin-top: 15px; height: 20px; }
         .stepper { display: flex; align-items: center; justify-content: center; gap: 20px; }
         .stepper-btn {
@@ -117,6 +117,7 @@
             padding-bottom: 5px;
         }
         .stepper-value { font-size: 20px; font-weight: 600; min-width: 20px; text-align: center; }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
@@ -149,7 +150,23 @@
             <div class="form-group"><label for="m_cut_increment">Cut Increment (%)</label><input type="number" id="m_cut_increment" oninput="updateMetricCalculations()"></div>
         </div>
         <div id="m_error" class="error-message"></div>
-        <div id="m_results" class="result-box"></div>
+        <div class="result-box">
+            <div id="m_calculated_values" class="calculated-values"></div>
+            <div id="m_incremental_cuts"></div>
+            <div class="fine-tune-area">
+                <div class="form-group"><label>Fine-Tune Cut (%)</label><input type="number" id="m_fine_tune_percent" oninput="updateMetricCalculations()"></div>
+                <div class="result-entry"><span id="m_fine_tune_percent_label" class="percentage"></span><span id="m_fine_tune_val" class="value"></span></div>
+            </div>
+            <div class="settings-area">
+                <div class="form-group"><label>Decimal Places</label>
+                    <div class="stepper">
+                        <button class="stepper-btn" onclick="changeDecimals(true, -1)">-</button>
+                        <span id="m_decimals_display" class="stepper-value">3</span>
+                        <button class="stepper-btn" onclick="changeDecimals(true, 1)">+</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Imperial Tab -->
@@ -171,7 +188,23 @@
             <div class="form-group"><label for="i_cut_increment">Cut Increment (%)</label><input type="number" id="i_cut_increment" oninput="updateImperialCalculations()"></div>
         </div>
         <div id="i_error" class="error-message"></div>
-        <div id="i_results" class="result-box"></div>
+        <div class="result-box">
+            <div id="i_calculated_values" class="calculated-values"></div>
+            <div id="i_incremental_cuts"></div>
+            <div class="fine-tune-area">
+                <div class="form-group"><label>Fine-Tune Cut (%)</label><input type="number" id="i_fine_tune_percent" oninput="updateImperialCalculations()"></div>
+                <div class="result-entry"><span id="i_fine_tune_percent_label" class="percentage"></span><span id="i_fine_tune_val" class="value"></span></div>
+            </div>
+            <div class="settings-area">
+                <div class="form-group"><label>Decimal Places</label>
+                    <div class="stepper">
+                        <button class="stepper-btn" onclick="changeDecimals(false, -1)">-</button>
+                        <span id="i_decimals_display" class="stepper-value">3</span>
+                        <button class="stepper-btn" onclick="changeDecimals(false, 1)">+</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -180,13 +213,21 @@
     const iInputIds = ['i_major_dia', 'i_tpi', 'i_cutter_dia', 'i_cut_increment', 'i_fine_tune_percent'];
     let mDecimalPlaces = 3, iDecimalPlaces = 3;
 
-    // --- References to DOM elements ---
+    // --- References to all DOM elements that need updating ---
     const m = {}, i = {};
     function getElements() {
         m.error = document.getElementById('m_error');
-        m.results = document.getElementById('m_results');
+        m.calculatedValues = document.getElementById('m_calculated_values');
+        m.incrementalCuts = document.getElementById('m_incremental_cuts');
+        m.fineTunePercentLabel = document.getElementById('m_fine_tune_percent_label');
+        m.fineTuneVal = document.getElementById('m_fine_tune_val');
+        m.decimalsDisplay = document.getElementById('m_decimals_display');
         i.error = document.getElementById('i_error');
-        i.results = document.getElementById('i_results');
+        i.calculatedValues = document.getElementById('i_calculated_values');
+        i.incrementalCuts = document.getElementById('i_incremental_cuts');
+        i.fineTunePercentLabel = document.getElementById('i_fine_tune_percent_label');
+        i.fineTuneVal = document.getElementById('i_fine_tune_val');
+        i.decimalsDisplay = document.getElementById('i_decimals_display');
         i.fractionDisplay = document.getElementById('i_fraction_display');
         mInputIds.forEach(id => m[id] = document.getElementById(id));
         iInputIds.forEach(id => i[id] = document.getElementById(id));
@@ -257,7 +298,7 @@
                 return result;
             }
         }
-        return ''; // No common fraction found
+        return '';
     }
     
     function updateCalculations(config) {
@@ -271,6 +312,7 @@
         const drillSize = majorDiaMM - pitch;
         
         elements.error.textContent = '';
+        elements.decimalsDisplay.textContent = decimalPlaces;
         
         if (!isMetric) {
             elements.fractionDisplay.textContent = decimalToFraction(majorDia);
@@ -279,7 +321,10 @@
         const inputs = { majorDia: majorDiaMM, cutterDia, pitch };
         for(const key in inputs) {
             if(isNaN(inputs[key])) {
-                elements.results.innerHTML = '';
+                elements.calculatedValues.innerHTML = '';
+                elements.incrementalCuts.innerHTML = '';
+                elements.fineTunePercentLabel.textContent = '';
+                elements.fineTuneVal.textContent = '';
                 return;
             }
         }
@@ -287,19 +332,14 @@
         if (drillSize <= 0) { elements.error.textContent = 'Pitch must be smaller than Major Dia.'; return; }
         if (cutterDia >= drillSize) { elements.error.textContent = 'Cutter Dia must be smaller than Drill Size.'; return; }
 
-        let calculatedValuesHTML = `<div class="calculated-values">
-                                        <div class="calculated-drill-size">
-                                            <span class="label">Drill Size:</span>
-                                            <span class="value">${drillSize.toFixed(decimalPlaces)} mm</span>
-                                        </div>`;
+        // --- Update Calculated Values ---
+        let calculatedValuesHTML = `<div class="calculated-drill-size"><span class="label">Drill Size:</span><span class="value">${drillSize.toFixed(decimalPlaces)} mm</span></div>`;
         if(!isMetric && pitch > 0) {
-             calculatedValuesHTML += `<div class="calculated-drill-size" style="padding-top:0;">
-                                        <span class="label">Thread Pitch (Use As Lead):</span>
-                                        <span class="value">${pitch.toFixed(decimalPlaces)} mm</span>
-                                      </div>`;
+             calculatedValuesHTML += `<div class="calculated-drill-size" style="padding-top:0;"><span class="label">Thread Pitch (Use As Lead):</span><span class="value">${pitch.toFixed(decimalPlaces)} mm</span></div>`;
         }
-        calculatedValuesHTML += '</div>';
-
+        elements.calculatedValues.innerHTML = calculatedValuesHTML;
+        
+        // --- Update Incremental Cuts ---
         let incrementalCutsHTML = '';
         if (!isNaN(increment) && increment > 0) {
             incrementalCutsHTML += '<h2>Incremental Cuts</h2>';
@@ -312,57 +352,41 @@
                  incrementalCutsHTML += `<div class="result-entry"><span class="percentage">100% Cut:</span> <span class="value">${value.toFixed(decimalPlaces)}</span></div>`;
             }
         }
+        elements.incrementalCuts.innerHTML = incrementalCutsHTML;
         
-        const fineTuneId = isMetric ? 'm_fine_tune_percent' : 'i_fine_tune_percent';
-        let fineTuneHTML = `<div class="fine-tune-area">
-                        <div class="form-group"><label>Fine-Tune Cut (%)</label><input type="number" id="${fineTuneId}" value="${fineTunePercent}" oninput="${isMetric ? 'updateMetricCalculations()' : 'updateImperialCalculations()'}"></div>
-                        <div class="result-entry" id="${fineTuneId}_result"></div></div>`;
-        
-        let settingsHTML = `<div class="settings-area">
-                        <div class="form-group"><label>Decimal Places</label>
-                            <div class="stepper">
-                                <button class="stepper-btn" onclick="changeDecimals(${isMetric}, -1)">-</button>
-                                <span class="stepper-value">${decimalPlaces}</span>
-                                <button class="stepper-btn" onclick="changeDecimals(${isMetric}, 1)">+</button>
-                            </div>
-                        </div></div>`;
-
-        elements.results.innerHTML = calculatedValuesHTML + incrementalCutsHTML + fineTuneHTML + settingsHTML;
-
-        const fineTuneResultEl = document.getElementById(`${fineTuneId}_result`);
-        const finalFineTuneValue = getVal(fineTuneId);
-
-        if(!isNaN(finalFineTuneValue)){
-            const value = calculateXAxisValue(majorDiaMM, drillSize, cutterDia, finalFineTuneValue);
-            fineTuneResultEl.innerHTML = `<span class="percentage">${finalFineTuneValue}% Cut:</span> <span class="value">${value.toFixed(decimalPlaces)}</span>`;
+        // --- Update Fine-Tune ---
+        if(!isNaN(fineTunePercent)){
+            const value = calculateXAxisValue(majorDiaMM, drillSize, cutterDia, fineTunePercent);
+            elements.fineTunePercentLabel.textContent = `${fineTunePercent}% Cut:`;
+            elements.fineTuneVal.textContent = value.toFixed(decimalPlaces);
         } else {
-            fineTuneResultEl.innerHTML = '';
+            elements.fineTunePercentLabel.textContent = '';
+            elements.fineTuneVal.textContent = '';
         }
         
         saveState();
     }
 
     function updateMetricCalculations(){
-        const getVal = (id) => parseFloat(document.getElementById(id)?.value);
+        const getVal = (id) => parseFloat(m[id]?.value);
         updateCalculations({
             values: { majorDia: getVal('m_major_dia'), pitch: getVal('m_pitch'), cutterDia: getVal('m_cutter_dia'), increment: getVal('m_cut_increment'), fineTunePercent: getVal('m_fine_tune_percent') || 100 },
-            isMetric: true, elements: { error: m.error, results: m.results }, decimalPlaces: mDecimalPlaces
+            isMetric: true, elements: m, decimalPlaces: mDecimalPlaces
         });
     }
 
     function updateImperialCalculations(){
-        const getVal = (id) => parseFloat(document.getElementById(id)?.value);
+        const getVal = (id) => parseFloat(i[id]?.value);
         updateCalculations({
             values: { majorDia: getVal('i_major_dia'), tpi: getVal('i_tpi'), cutterDia: getVal('i_cutter_dia'), increment: getVal('i_cut_increment'), fineTunePercent: getVal('i_fine_tune_percent') || 100 },
-            isMetric: false, elements: { error: i.error, results: i.results, fractionDisplay: i.fractionDisplay }, decimalPlaces: iDecimalPlaces
+            isMetric: false, elements: i, decimalPlaces: iDecimalPlaces
         });
     }
 
     document.addEventListener('DOMContentLoaded', () => {
         getElements();
-        // Set default values if nothing is in local storage
-        if(localStorage.getItem('m_major_dia') === null) { m.m_major_dia.value = 6; m.m_pitch.value = 1; m.m_cutter_dia.value = 4.8; m.m_cut_increment.value = 25; }
-        if(localStorage.getItem('i_major_dia') === null) { i.i_major_dia.value = 0.25; i.i_tpi.value = 20; i.i_cutter_dia.value = 4.8; i.i_cut_increment.value = 25; }
+        if(localStorage.getItem('m_major_dia') === null) { m.m_major_dia.value = 6; m.m_pitch.value = 1; m.m_cutter_dia.value = 4.8; m.m_cut_increment.value = 25; m.m_fine_tune_percent.value = 100; }
+        if(localStorage.getItem('i_major_dia') === null) { i.i_major_dia.value = 0.25; i.i_tpi.value = 20; i.i_cutter_dia.value = 4.8; i.i_cut_increment.value = 25; i.i_fine_tune_percent.value = 100; }
         loadState();
         updateMetricCalculations();
         updateImperialCalculations();
